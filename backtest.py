@@ -35,8 +35,13 @@ class Config:
     ema_period: int = 20
     atr_period: int = 14
     range_sanity_atr_mult: float = 0.6
-    stop_atr_d_mult: float = 0.25          # 15-min ATR proxy
-    trail_atr_d_mult: float = 0.20         # 2 × 0.10 × ATR_d
+    # Default cap raised from 0.25 to 1.0 × ATR_d so the cap rarely binds —
+    # stop sits at the opposite range side, which is the strategy's theoretical
+    # invalidation level. The old 0.25 cap was putting stops *inside* the range
+    # and getting nibbled on routine post-breakout retraces.
+    stop_atr_d_mult: float = 1.0
+    trail_atr_d_mult: float = 0.20         # 5-min ATR proxy × 2
+    scale_out: bool = True                 # 50% off at +1R, runner trails
     risk_pct: float = 0.04
     point_value_eur: float = 1.0
     starting_equity: float = 50000.0
@@ -187,38 +192,41 @@ def run_backtest(df1m, cfg):
             stop_px = entry_px + stop_dist
             tp1_px = entry_px - tp1_dist
 
-        # Walk forward through the day
+        # Walk forward through the day. runner_stop is always defined and
+        # starts at the initial stop. If --scale-out, the trail only kicks in
+        # after the half-close at TP1; otherwise the full position trails from
+        # the very first bar.
         sim = day[(day.index > entry_time) & (day["mod"] < cfg.session_end_min)]
         half_done = False
-        runner_stop = None
-        exit_legs = []  # (exit_px, fraction)
+        runner_stop = stop_px
+        exit_legs = []
         stopped_out = False
         for ts, bar in sim.iterrows():
             if side == "long":
-                active_stop = runner_stop if half_done else stop_px
-                if bar["low"] <= active_stop:
-                    exit_legs.append((active_stop, 0.5 if half_done else 1.0))
+                if bar["low"] <= runner_stop:
+                    frac = 0.5 if (cfg.scale_out and half_done) else 1.0
+                    exit_legs.append((runner_stop, frac))
                     stopped_out = True
                     break
-                if not half_done and bar["high"] >= tp1_px:
+                if cfg.scale_out and not half_done and bar["high"] >= tp1_px:
                     exit_legs.append((tp1_px, 0.5))
                     half_done = True
                     runner_stop = entry_px
-                if half_done:
+                if (not cfg.scale_out) or half_done:
                     new_trail = bar["high"] - trail_offset
                     if new_trail > runner_stop:
                         runner_stop = new_trail
             else:
-                active_stop = runner_stop if half_done else stop_px
-                if bar["high"] >= active_stop:
-                    exit_legs.append((active_stop, 0.5 if half_done else 1.0))
+                if bar["high"] >= runner_stop:
+                    frac = 0.5 if (cfg.scale_out and half_done) else 1.0
+                    exit_legs.append((runner_stop, frac))
                     stopped_out = True
                     break
-                if not half_done and bar["low"] <= tp1_px:
+                if cfg.scale_out and not half_done and bar["low"] <= tp1_px:
                     exit_legs.append((tp1_px, 0.5))
                     half_done = True
                     runner_stop = entry_px
-                if half_done:
+                if (not cfg.scale_out) or half_done:
                     new_trail = bar["low"] + trail_offset
                     if new_trail < runner_stop:
                         runner_stop = new_trail
@@ -227,7 +235,8 @@ def run_backtest(df1m, cfg):
             if len(sim) == 0:
                 continue
             last_close = sim.iloc[-1]["close"]
-            exit_legs.append((last_close, 0.5 if half_done else 1.0))
+            frac = 0.5 if (cfg.scale_out and half_done) else 1.0
+            exit_legs.append((last_close, frac))
 
         # PnL with exit slippage
         pnl_pts = 0.0
@@ -307,6 +316,11 @@ def main():
     ap.add_argument("--skip-friday", action="store_true")
     ap.add_argument("--entry-cutoff", default="10:30",
                     help="Latest entry time HH:MM CET. Default 10:30.")
+    ap.add_argument("--no-scale-out", action="store_true",
+                    help="Disable 50% at +1R; trail full position from entry.")
+    ap.add_argument("--stop-cap", type=float, default=1.0,
+                    help="Cap stop distance at this × ATR_daily. Default 1.0 "
+                         "(effectively no cap; opposite range side is used).")
     ap.add_argument("--out-trades", default="trades.csv")
     args = ap.parse_args()
 
@@ -323,6 +337,8 @@ def main():
         use_range_sanity=not args.no_range_sanity,
         skip_friday=args.skip_friday,
         entry_cutoff_min=cutoff,
+        scale_out=not args.no_scale_out,
+        stop_atr_d_mult=args.stop_cap,
     )
 
     df = load_1m(args.data)

@@ -86,12 +86,68 @@ US-open leg as a second uncorrelated bet on the same day.
   3-loss-day kill-switch.
 - **Robustness**: parameter sensitivity grid, Monte Carlo trade-order shuffle.
 
-## 6. Open questions
+## 6. Locked v1 spec (CFD, one-shot, flat 4%)
 
-- Data source: FDAX/FDXM intraday vs DAX CFD?
-- Risk capital and per-trade R appetite?
-- Always-in two-windows-per-day, or one-shot-per-day philosophy?
-- Prototype primary leg first, then bolt on US-open leg?
+Decisions taken:
+
+- Instrument: **DAX CFD** (broker-execution; e.g. IG / CMC DE40).
+- Window: **Xetra leg only** (09:00–09:15 CET).
+- Per-trade risk: **flat 4% of equity**.
+- Trade frequency: **one shot per day**, first qualified breakout only, no re-entry.
+- Data source: **Dukascopy DEU.IDX 1-min** (free, ~20yr history). Volume column
+  is broker-quote volume and not used for RVOL in v1.
+
+### Rules
+
+- Range: 1-min bars from 09:00:00 inclusive to 09:15:00 exclusive (CET).
+- Min range size: ≥ 12 pts. Skip if smaller.
+- Range sanity: skip if range > 0.6 × ATR(14, daily).
+- Trend filter: prev-day close > EMA20(daily) ⇒ longs only; below ⇒ shorts only.
+- Gap filter: today's 09:00 open vs prev 17:30 close must agree with trade direction.
+- Buffer above/below range: max(2 pts, 0.10 × range).
+- Entry: first 1-min bar that **closes** beyond range ± buffer, between 09:15
+  and session end. Take first valid side only.
+- Stop: opposite side of range, capped at 0.25 × ATR(14, daily) as a 15-min
+  ATR proxy in v1. To be replaced with true ATR(15-min) in v2.
+- Targets: 50% off at +1R, runner trailed by 2 × 0.10 × ATR(14, daily) as a
+  5-min ATR proxy in v1; move runner stop to break-even after first half hits.
+- Hard time stop: flat at 17:25 CET.
+- Slippage model: 2 pts round-trip per trade.
+
+### Risk & sizing
+
+- Equity-fraction sizing: contracts = (equity × 0.04) / (stop_dist × point_value).
+- Point value defaults to €1/pt; user must set their broker's actual point
+  value via CLI flag.
+
+### Day-of-week / regime
+
+- Friday block: configurable (default off; can be re-evaluated after backtest).
+- Half-size after weekend gap > 0.7%: deferred to v2.
+
+### Known v1 simplifications (to fix in v2)
+
+- ATR(15-min) and ATR(5-min) approximated as fixed fractions of daily ATR
+  (0.25 and 0.10 respectively).
+- RVOL filter omitted (CFD volume unreliable).
+- News-blackout filter omitted (no macro calendar wired up).
+- Intra-bar stop/TP ambiguity resolved pessimistically: if both stop and TP1
+  prices fall inside the same bar's range, stop is assumed hit first.
+
+### Backtest data plan
+
+- Period: rolling 5+ years (e.g. 2020-01-01 to today) for in-sample, then
+  add 2015–2019 as out-of-sample once v1 stabilises.
+- Walk-forward: annual OOS slices once initial baseline numbers exist.
+
+### What we expect to see (rough sanity targets, not promises)
+
+- Trades: ~100–180 per year (after filters).
+- Win rate: 45–55%.
+- Profit factor: 1.3–1.8.
+- Max drawdown at 4% flat risk: 20–35% within any given year.
+- Sharpe (per-trade): 1.0–1.8.
+- Numbers materially outside these bands are a red flag — overfit or bug.
 
 ## 7. Sources
 

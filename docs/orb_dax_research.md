@@ -112,7 +112,16 @@ Decisions taken:
 - Targets: 50% off at +1R, runner trailed by 2 × 0.10 × ATR(14, daily) as a
   5-min ATR proxy in v1; move runner stop to break-even after first half hits.
 - Hard time stop: flat at 17:25 CET.
-- Slippage model: 2 pts round-trip per trade.
+- Slippage model: **3 pts round-trip** per trade (default; conservative for
+  09:00 entries on most retail DAX CFD brokers).
+
+### Daily-feature window
+
+Daily EMA20, ATR14 and the gap-filter `prev_close` are computed from the
+**Xetra cash session only (09:00-17:30 CET)**. Pre-Xetra and post-Xetra
+prints present on FDAX-style feeds (e.g. Dukascopy DEUIDXEUR, which trades
+~08:00-22:00 CET) are excluded so the gap signal is Xetra-to-Xetra, not
+contaminated by overnight FDAX drift.
 
 ### Risk & sizing
 

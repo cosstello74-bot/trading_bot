@@ -39,7 +39,7 @@ class Config:
     risk_pct: float = 0.04
     point_value_eur: float = 1.0
     starting_equity: float = 50000.0
-    slippage_pts_rt: float = 2.0
+    slippage_pts_rt: float = 3.0
     use_trend: bool = True
     use_gap: bool = True
     use_range_sanity: bool = True
@@ -57,7 +57,12 @@ def load_1m(path):
 
 
 def daily_features(df1m, ema_p, atr_p):
-    daily = df1m.resample("1D").agg(
+    # Restrict to Xetra cash session (09:00-17:30 CET) so the daily close
+    # used for the gap filter and EMA20 is the Xetra close, not a 22:00
+    # extended-hours print on FDAX-style feeds (e.g. Dukascopy DEU.IDX).
+    m = df1m.index.hour * 60 + df1m.index.minute
+    xetra = df1m[(m >= 9 * 60) & (m < 17 * 60 + 30)]
+    daily = xetra.resample("1D").agg(
         {"open": "first", "high": "max", "low": "min", "close": "last"}
     ).dropna()
     daily["ema"] = daily["close"].ewm(span=ema_p, adjust=False).mean()
@@ -290,7 +295,7 @@ def main():
     ap.add_argument("--risk", type=float, default=0.04)
     ap.add_argument("--point-value", type=float, default=1.0,
                     help="Broker EUR-per-point per 1 contract/lot.")
-    ap.add_argument("--slippage", type=float, default=2.0,
+    ap.add_argument("--slippage", type=float, default=3.0,
                     help="Round-trip slippage in points.")
     ap.add_argument("--no-trend", action="store_true")
     ap.add_argument("--no-gap", action="store_true")

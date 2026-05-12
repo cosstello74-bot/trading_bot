@@ -316,6 +316,10 @@ def main():
     ap.add_argument("--skip-friday", action="store_true")
     ap.add_argument("--entry-cutoff", default="10:30",
                     help="Latest entry time HH:MM CET. Default 10:30.")
+    ap.add_argument("--range-start", default="09:00",
+                    help="Range start HH:MM CET. Default 09:00.")
+    ap.add_argument("--range-end", default="09:15",
+                    help="Range end HH:MM CET (exclusive). Default 09:15.")
     ap.add_argument("--no-scale-out", action="store_true",
                     help="Disable 50% at +1R; trail full position from entry.")
     ap.add_argument("--stop-cap", type=float, default=1.0,
@@ -324,8 +328,9 @@ def main():
     ap.add_argument("--out-trades", default="trades.csv")
     args = ap.parse_args()
 
-    h, m = args.entry_cutoff.split(":")
-    cutoff = int(h) * 60 + int(m)
+    def hhmm(s):
+        h, m = s.split(":")
+        return int(h) * 60 + int(m)
 
     cfg = Config(
         risk_pct=args.risk,
@@ -336,7 +341,9 @@ def main():
         use_gap=not args.no_gap,
         use_range_sanity=not args.no_range_sanity,
         skip_friday=args.skip_friday,
-        entry_cutoff_min=cutoff,
+        range_start_min=hhmm(args.range_start),
+        range_end_min=hhmm(args.range_end),
+        entry_cutoff_min=hhmm(args.entry_cutoff),
         scale_out=not args.no_scale_out,
         stop_atr_d_mult=args.stop_cap,
     )

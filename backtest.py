@@ -27,6 +27,7 @@ CET = pytz.timezone("Europe/Berlin")
 class Config:
     range_start_min: int = 9 * 60          # 09:00 CET in minutes-of-day
     range_end_min: int = 9 * 60 + 15       # 09:15
+    entry_cutoff_min: int = 10 * 60 + 30   # 10:30 — no new entries after this
     session_end_min: int = 17 * 60 + 25    # 17:25
     min_range_pts: float = 12.0
     buffer_pts: float = 2.0
@@ -40,7 +41,9 @@ class Config:
     point_value_eur: float = 1.0
     starting_equity: float = 50000.0
     slippage_pts_rt: float = 3.0
-    use_trend: bool = True
+    # Ablations showed the strict daily-trend filter hurt PF on 2023-24 DAX
+    # (PF 0.72 with vs 0.87 without). Default it OFF; can be re-enabled.
+    use_trend: bool = False
     use_gap: bool = True
     use_range_sanity: bool = True
     skip_friday: bool = False
@@ -140,7 +143,7 @@ def run_backtest(df1m, cfg):
         long_trig = rh + buf
         short_trig = rl - buf
 
-        post = day[(day["mod"] >= cfg.range_end_min) & (day["mod"] < cfg.session_end_min)]
+        post = day[(day["mod"] >= cfg.range_end_min) & (day["mod"] < cfg.entry_cutoff_min)]
         if post.empty:
             continue
 
@@ -297,22 +300,29 @@ def main():
                     help="Broker EUR-per-point per 1 contract/lot.")
     ap.add_argument("--slippage", type=float, default=3.0,
                     help="Round-trip slippage in points.")
-    ap.add_argument("--no-trend", action="store_true")
+    ap.add_argument("--trend", action="store_true",
+                    help="Enable the daily-trend filter (off by default).")
     ap.add_argument("--no-gap", action="store_true")
     ap.add_argument("--no-range-sanity", action="store_true")
     ap.add_argument("--skip-friday", action="store_true")
+    ap.add_argument("--entry-cutoff", default="10:30",
+                    help="Latest entry time HH:MM CET. Default 10:30.")
     ap.add_argument("--out-trades", default="trades.csv")
     args = ap.parse_args()
+
+    h, m = args.entry_cutoff.split(":")
+    cutoff = int(h) * 60 + int(m)
 
     cfg = Config(
         risk_pct=args.risk,
         starting_equity=args.equity,
         point_value_eur=args.point_value,
         slippage_pts_rt=args.slippage,
-        use_trend=not args.no_trend,
+        use_trend=args.trend,
         use_gap=not args.no_gap,
         use_range_sanity=not args.no_range_sanity,
         skip_friday=args.skip_friday,
+        entry_cutoff_min=cutoff,
     )
 
     df = load_1m(args.data)

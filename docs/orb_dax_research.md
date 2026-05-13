@@ -249,6 +249,78 @@ in every regime.
 This research project is closed at v4c-90m. Re-opening it should require a
 qualitatively different hypothesis, not another parameter tweak.
 
+## 8. v5 addendum — "Upgraded" ORB also fails
+
+Following user pushback that the naive v1-v4 form was too simplistic, a v5
+implementation was added (`backtest_v5.py`) encoding the four mechanical
+upgrades described in a reference trader video:
+
+1. Direction bias must align on previous-day candle AND last completed 4H bar
+   before 09:00 CET (not just daily EMA20).
+2. Pullback-confirmation 5-min state machine: wait_breakout → wait_pullback
+   → qualifying-candle close above pullback level (longs; mirror for shorts).
+3. Entry as a stop order at the qualifying candle's high/low, triggered by a
+   subsequent 1-min bar break.
+4. Stop at the qualifying candle's opposite extreme + optional move-to-BE
+   after 0.5R favourable.
+
+Subjective "clean zones" (resistance/support left-side mess) filter omitted —
+no mechanical proxy.
+
+### Result on the same 7 years (2018-2024)
+
+| Year | Trades | PnL | Win rate | PF |
+|---|---|---|---|---|
+| 2018 | 38 | -€1,150 | 39% | 0.96 |
+| 2019 | 43 | -€10,244 | 40% | 0.73 |
+| 2020 | 53 | -€11,789 | 36% | 0.64 |
+| 2021 | 42 | -€11,290 | 26% | 0.37 |
+| 2022 | 53 | -€3,062 | 34% | 0.74 |
+| 2023 | 41 | -€1,728 | 37% | 0.78 |
+| 2024 | 58 | -€3,867 | 31% | 0.57 |
+
+**Zero winning years out of seven.** Headline PF 0.71, max DD -89%, ending
+at €6,867 from €50k starting equity.
+
+### Why v5 underperformed v4c on DAX
+
+- Win rate **26-40%** across all 7 years on a 1:1 fixed RR pattern. To break
+  even at 1:1 you need > 50% WR. The pullback-confirmation pattern on DAX
+  systematically picks losers.
+- The qualifying-candle structural stop (~10-15 pts) is so tight that 3 pts
+  of round-trip slippage is a non-trivial cost on every trade. Avg win/loss
+  collapsed to €200-€300 vs v4c's €1300.
+- The daily+4H bias filter is so restrictive that it skips many
+  setups but, on the survivors, win rate did not improve.
+
+### Three plausible interpretations of the source's "70% win rate" claim
+
+1. The strategy works on US indices (NYSE 09:30 ET open) but not on Xetra.
+   Different intraday microstructure, more institutional flow continuation.
+2. The discretionary "clean zones" filter is the actual edge and cannot be
+   mechanically replicated. By eye the source rejects 5-10x more setups
+   than the mechanical version.
+3. Selection bias: video shows trades that worked. 4-6 trades is not a
+   sample.
+
+The 7-year backtest does not distinguish between these. What it does
+definitively establish is that **the mechanical form of the upgraded ORB is
+not profitable on DAX 2018-2024.**
+
+### Final conclusion
+
+Two independent rule-sets (naive v1-v4 and structure-based v5) both fail
+across the same 7-year DAX sample, in the same regime-dependent way (rare
+winning years, mostly losing or break-even). For an *automated* trading
+mandate this is conclusive: the ORB family of strategies, as described in
+public sources, does not survive mechanical execution on DAX.
+
+If the source's strategy works at all, the edge is in the subjective layer
+(left-side cleanliness, manual zone selection, possibly instrument choice).
+That layer is precisely what automation cannot capture.
+
+Project closed.
+
 ## 7. Sources
 
 - QuantifiedStrategies — ORB backtest overview.

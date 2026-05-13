@@ -158,6 +158,97 @@ contaminated by overnight FDAX drift.
 - Sharpe (per-trade): 1.0–1.8.
 - Numbers materially outside these bands are a red flag — overfit or bug.
 
+## 7. Empirical results and conclusion
+
+The backtester was iterated through five variants on Dukascopy DEU.IDX 1-min
+data. In-sample window: 2023-01-01 to 2025-01-01. Out-of-sample window:
+2018-01-01 to 2023-01-01.
+
+### v1 → v3a → v4c progression
+
+| Version | Change | IS PF | IS CAGR | IS Max DD |
+|---|---|---|---|---|
+| v1 (locked spec) | Baseline 09:00-09:15 range, trend+gap filters, scale-out, 0.25 ATR_d stop cap | 0.72 | -41% | -72% |
+| v2 | Added entry cutoff 10:30, default trend filter OFF | 0.78 | -60% | -87% |
+| v3a | Removed tight stop cap (cap raised to 1.0 ATR_d) | 0.83 | -42% | -74% |
+| v3b | v3a + no scale-out (full position trail) | 0.71 | -45% | -74% |
+| v4a | Range moved to pre-Xetra 08:00-09:00 | 0.69 | -63% | -87% |
+| v4b | Range Klatt-style 09:00-09:30 | 0.77 | -41% | -67% |
+| **v4c** | **Range first-hour 09:00-10:00** | **1.21** | **+26%** | -44% |
+| v4c-90m | Range 09:00-10:30 | 1.23 | +18% | -37% |
+
+v4c-90m looked like a robust winner in-sample. Sensitivity testing (45m, 60m,
+90m all PF > 1) suggested it was not knife-edge curve-fit.
+
+### Out-of-sample collapse
+
+Running v4c-90m on 2018-2022 (5 years of unseen data):
+
+| Year | PF | PnL | Win rate |
+|---|---|---|---|
+| 2018 | 0.96 | -€1,575 | 54% |
+| 2019 | **0.51** | **-€24,376** | **31%** |
+| 2020 | 0.95 | -€1,213 | 51% |
+| 2021 | 1.40 | +€6,556 | 56% |
+| 2022 | 0.85 | -€4,776 | 43% |
+| 2023 (IS) | 0.85 | -€6,209 | 48% |
+| 2024 (IS) | 1.64 | +€24,417 | 63% |
+
+**Overall: 2 winning years out of 7. The combined 7-year track record is a net
+loss with PF below 1.0.** The in-sample +26% CAGR was effectively the 2024
+year carrying everything; 2023 (also in-sample) was already a losing year on
+its own.
+
+### Conclusion
+
+Single-window Xetra opening-range breakout on DAX, in its naive form **with
+or without** the standard filter stack (trend, gap, range-sanity, entry
+cutoff, looser stop, scale-out), **does not generalise across regimes** on
+DAX from 2018-2024. The published academic finding — that naive ORB has
+lost its edge on the major indices over the last decade — is empirically
+reproduced here on the German index.
+
+2019 is the most informative loss: a strong directional bull year that
+*should* be friendly to a breakout strategy delivered a 31% win rate. The
+edge appears to require a specific kind of intraday volatility (chunky,
+trend-day-like) that DAX does not produce reliably from the 09:00 cash open
+in every regime.
+
+### What was built (still useful)
+
+- `fetch_dax_data.py` — parallel Dukascopy DEU.IDX tick-to-1-min OHLC
+  downloader with auto point-divisor detection.
+- `backtest.py` — single-file Xetra-only ORB backtester with full CLI
+  parameterisation (range start/end, entry cutoff, stop cap, scale-out toggle,
+  trend/gap/range-sanity filters, slippage and point-value).
+- Walk-forward methodology: train on 2023-2024, validate on 2018-2022. The
+  framework can be reused for any future Xetra-window strategy.
+
+### What NOT to do (curve-fit traps observed)
+
+- Tuning range length on 2023-2024 alone produces a tempting +26% CAGR that
+  evaporates on OOS.
+- Increasing the filter stack to recover OOS performance risks fitting noise.
+  Any "fix" that improves all 5 OOS years simultaneously by parameter changes
+  to a stricter version of the same setup is a red flag.
+
+### Pointers for any future work on DAX
+
+1. Try the **fade direction**: in chop years (most of our sample) breakouts
+   fail. A "fade the first hour high/low" model is the natural counterpart
+   to test next.
+2. **Regime-conditional trading**: only trade days where a volatility or
+   trend-strength indicator (VSTOXX percentile, daily ADX, multi-day slope)
+   is in a pre-specified window.
+3. **Multi-instrument**: pair the DAX signal with ES/NQ overnight bias,
+   Bund yield direction, EURUSD direction. Single-instrument signals are
+   typically too noisy to carry alone.
+4. **Different window**: the literature also documents a 15:30 CET US-open
+   ORB; we deferred it (Xetra-only by user choice) and never tested it.
+
+This research project is closed at v4c-90m. Re-opening it should require a
+qualitatively different hypothesis, not another parameter tweak.
+
 ## 7. Sources
 
 - QuantifiedStrategies — ORB backtest overview.

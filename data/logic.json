@@ -1,0 +1,48 @@
+{
+  "products": [
+    {
+      "id": "p1",
+      "name": "Lenovo IdeaPad Gaming 3",
+      "category": "gaming",
+      "budget": "mid",
+      "affiliate_url": "https://amazon.co.uk/dp/example1"
+    },
+    {
+      "id": "p2",
+      "name": "ASUS VivoBook 15",
+      "category": "work",
+      "budget": "low",
+      "affiliate_url": "https://amazon.co.uk/dp/example2"
+    },
+    {
+      "id": "p3",
+      "name": "MacBook Air M2",
+      "category": "creative",
+      "budget": "high",
+      "affiliate_url": "https://amazon.co.uk/dp/example3"
+    }
+  ],
+  "rules": [
+    {
+      "if": {
+        "purpose": "gaming",
+        "budget": "mid"
+      },
+      "recommendations": ["p1"]
+    },
+    {
+      "if": {
+        "purpose": "work",
+        "budget": "low"
+      },
+      "recommendations": ["p2"]
+    },
+    {
+      "if": {
+        "purpose": "creative",
+        "budget": "high"
+      },
+      "recommendations": ["p3"]
+    }
+  ]
+}
